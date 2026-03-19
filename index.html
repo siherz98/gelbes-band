@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gelbes Band Karte</title>
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
+  />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css"
+  />
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      font-family: Arial, sans-serif;
+    }
+
+    #map-wrapper {
+      width: 100%;
+      height: 800px;
+      min-height: 800px;
+      margin: 0;
+      padding: 0;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .leaflet-popup-content {
+      margin: 12px 14px;
+      min-width: 260px;
+    }
+
+    .gb-form label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    .gb-form input[type="text"],
+    .gb-form textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #999;
+      padding: 6px;
+      font-size: 13px;
+      background: #fff;
+    }
+
+    .gb-form textarea {
+      resize: vertical;
+      min-height: 40px;
+    }
+
+    .gb-form fieldset {
+      border: 1px solid #aaa;
+      margin: 8px 0;
+      padding: 8px 10px 10px 10px;
+    }
+
+    .gb-form legend {
+      font-weight: bold;
+      font-size: 13px;
+      padding: 0 4px;
+    }
+
+    .gb-checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      margin-top: 4px;
+    }
+
+    .gb-checks label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin: 0;
+      font-size: 13px;
+      font-weight: normal;
+    }
+
+    .gb-btn,
+    .gb-filter button {
+      width: 100%;
+      padding: 7px 10px;
+      margin-top: 8px;
+      border: 1px solid #888;
+      background: #e9e9e9;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .gb-btn:hover,
+    .gb-filter button:hover {
+      background: #ddd;
+    }
+
+    .gb-loading {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .gb-summary {
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .gb-summary strong {
+      display: inline-block;
+      min-width: 84px;
+    }
+
+    .gb-filter {
+      background: #fff;
+      min-width: 220px;
+      max-width: 320px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.2);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .gb-filter-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid #ddd;
+      cursor: pointer;
+      user-select: none;
+      font-size: 14px;
+      background: #fff;
+    }
+
+    .gb-filter-body {
+      padding: 8px 10px;
+      font-size: 13px;
+      background: #fff;
+    }
+
+    .gb-filter-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .gb-filter-actions button {
+      flex: 1;
+      margin-top: 0;
+    }
+
+    .gb-mini-title {
+      font-size: 12px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+
+    .gb-inline-checks label {
+      display: inline-block;
+      margin: 2px 10px 2px 0;
+      font-weight: normal;
+    }
+
+    .leaflet-control-geocoder {
+      max-width: 260px;
+    }
+
+    .gb-locate-btn {
+      background: #fff;
+      border: none;
+      width: 34px;
+      height: 34px;
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 34px;
+      text-align: center;
+      padding: 0;
+    }
+
+    .gb-status {
+      position: absolute;
+      z-index: 999;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.95);
+      border: 1px solid #ccc;
+      padding: 6px 10px;
+      font-size: 13px;
+      border-radius: 6px;
+      display: none;
+      box-shadow: 0 1px 4px rgba(0,0,0,.15);
+    }
+  </style>
+</head>
+<body>
+  <div id="map-wrapper">
+    <div id="gb-status" class="gb-status"></div>
+    <div id="map"></div>
+  </div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin=""
+  ></script>
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+    // -----------------------------
+    // Supabase Konfiguration
+    // -----------------------------
+    const SUPABASE_URL = "https://mjseagimuuuwwldixwjf.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_Eoo69QwrvEAZus8XPHuCvg_bleMNhF5";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // -----------------------------
+    // Konfiguration
+    // -----------------------------
+    const FILTER_COLLAPSE_KEY = "gelbes_band_filter_collapsed";
+
+    const FRUIT_DEFAULTS = [
+      "Apfel", "Birne", "Kirsche", "Pflaume",
+      "Zwetschge", "Mirabelle", "Quitte",
+      "Nussbaum", "Holunder", "Johannesbeere"
+    ];
+
+    const SEASON_DEFAULTS = [
+      "Frühling", "Sommer", "Herbst", "Winter"
+    ];
+
+    // -----------------------------
+    // UI Helpers
+    // -----------------------------
+    const statusBox = document.getElementById("gb-status");
+
+    function showStatus(message, isError = false) {
+      statusBox.textContent = message;
+      statusBox.style.display = "block";
+      statusBox.style.borderColor = isError ? "#c66" : "#ccc";
+      statusBox.style.background = isError ? "rgba(255,240,240,0.98)" : "rgba(255,255,255,0.95)";
+      clearTimeout(showStatus._timer);
+      showStatus._timer = setTimeout(() => {
+        statusBox.style.display = "none";
+      }, 3000);
+    }
+
+    // -----------------------------
+    // Karte
+    // -----------------------------
+    const map = L.map("map", {
+      center: [54.2, 9.6],
+      zoom: 8
+    });
+
+    const greyMap = L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+      {
+        attribution: "&copy; OpenStreetMap contributors, &copy; CARTO",
+        subdomains: "abcd",
+        maxZoom: 20
+      }
+    ).addTo(map);
+
+    const imageryMap = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution: "&copy; Esri, Maxar, Earthstar Geographics"
+      }
+    );
+
+    const markerLayer = L.layerGroup().addTo(map);
+
+    L.control.layers(
+      {
+        "Grey": greyMap,
+        "Imagery": imageryMap
+      },
+      {
+        "Punkte": markerLayer
+      },
+      {
+        position: "topleft",
+        collapsed: true
+      }
+    ).addTo(map);
+
+    const shBounds = L.latLngBounds(
+      [53.2, 8.0],
+      [55.3, 11.5]
+    );
+    map.fitBounds(shBounds);
+    map.setMaxBounds(shBounds);
+
+    // -----------------------------
+    // Icons
+    // -----------------------------
+    function makeSvgIcon(fillColor) {
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
+          <path d="M12.5 0C5.6 0 0 5.6 0 12.5c0 9.4 12.5 28.5 12.5 28.5S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0z" fill="${fillColor}" stroke="#8a7d15" stroke-width="1.2"/>
+          <circle cx="12.5" cy="12.5" r="5.2" fill="#fff" opacity="0.95"/>
+        </svg>
+      `.trim();
+
+      return L.icon({
+        iconUrl: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg),
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34]
+      });
+    }
+
+    const yellowIcon = makeSvgIcon("#d4c62b");
+    const blueIcon = makeSvgIcon("#2f7de1");
+
+    // -----------------------------
+    // Datenhaltung
+    // -----------------------------
+    let allMarkers = [];
+    const leafletMarkers = new Map();
+    let lastSearchMarker = null;
+    let tempCreateMarker = null;
+    let createPaused = false;
+
+    // -----------------------------
+    // Utils
+    // -----------------------------
+    function esc(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function formatAddressFromNominatim(data) {
+      if (!data || !data.address) return data?.display_name || "";
+
+      const a = data.address;
+      const parts = [];
+
+      if (a.road && a.house_number) parts.push(`${a.road} ${a.house_number}`);
+      else if (a.road) parts.push(a.road);
+
+      const locality = a.city || a.town || a.village || a.hamlet || a.suburb || "";
+      if (a.postcode || locality) {
+        parts.push([a.postcode, locality].filter(Boolean).join(" "));
+      }
+
+      const admin = [a.county, a.state].filter(Boolean);
+      if (admin.length) parts.push(admin.join(", "));
+
+      return parts.join(", ") || data.display_name || "";
+    }
+
+    async function reverseGeocode(lat, lng) {
+      const url = new URL("https://nominatim.openstreetmap.org/reverse");
+      url.searchParams.set("format", "jsonv2");
+      url.searchParams.set("lat", String(lat));
+      url.searchParams.set("lon", String(lng));
+      url.searchParams.set("zoom", "18");
+      url.searchParams.set("addressdetails", "1");
+      url.searchParams.set("accept-language", "de");
+
+      const res = await fetch(url.toString(), {
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+
+      if (!res.ok) throw new Error("Reverse-Geocoding fehlgeschlagen.");
+      return await res.json();
+    }
+
+    function toArray(v) {
+      if (Array.isArray(v)) return v;
+      if (!v) return [];
+      return [v];
+    }
+
+    function formatCreatedAt(value) {
+      if (!value) return "";
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? String(value) : d.toLocaleString("de-DE");
+    }
+
+    // -----------------------------
+    // Supabase Funktionen
+    // -----------------------------
+    async function loadMarkersFromSupabase() {
+      const { data, error } = await supabaseClient
+        .from("markers")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error(error);
+        showStatus("Fehler beim Laden der Marker.", true);
+        return [];
+      }
+
+      return data || [];
+    }
+
+    async function insertMarkerToSupabase(markerPayload) {
+      const { data, error } = await supabaseClient
+        .from("markers")
+        .insert([markerPayload])
+        .select()
+        .single();
+
+      if (error) {
+        console.error(error);
+        throw error;
+      }
+
+      return data;
+    }
+
+    // -----------------------------
+    // Suche
+    // -----------------------------
+    L.Control.geocoder({
+      placeholder: "Adresse suchen …",
+      errorMessage: "Nichts gefunden",
+      defaultMarkGeocode: false,
+      geocoder: L.Control.Geocoder.nominatim({
+        geocodingQueryParams: {
+          countrycodes: "de",
+          "accept-language": "de"
+        }
+      })
+    })
+      .on("markgeocode", (e) => {
+        if (lastSearchMarker) {
+          map.removeLayer(lastSearchMarker);
+          lastSearchMarker = null;
+        }
+
+        lastSearchMarker = L.marker(e.geocode.center, { icon: blueIcon })
+          .addTo(map)
+          .bindPopup(esc(e.geocode.name));
+
+        map.setView(e.geocode.center, 16);
+        lastSearchMarker.openPopup();
+      })
+      .addTo(map);
+
+    map.on("popupclose", (e) => {
+      if (lastSearchMarker && e.popup._source === lastSearchMarker) {
+        map.removeLayer(lastSearchMarker);
+        lastSearchMarker = null;
+      }
+    });
+
+    // -----------------------------
+    // Standort-Button
+    // -----------------------------
+    const locateCtrl = L.control({ position: "topleft" });
+    locateCtrl.onAdd = function() {
+      const btn = L.DomUtil.create("button", "leaflet-bar gb-locate-btn");
+      btn.type = "button";
+      btn.title = "Meinen Standort zeigen";
+      btn.textContent = "📍";
+
+      btn.onclick = function() {
+        map.locate({
+          setView: true,
+          maxZoom: 16,
+          enableHighAccuracy: true
+        });
+      };
+
+      return btn;
+    };
+    locateCtrl.addTo(map);
+
+    let youMarker = null;
+    let youCircle = null;
+
+    map.on("locationfound", (e) => {
+      if (youMarker) map.removeLayer(youMarker);
+      if (youCircle) map.removeLayer(youCircle);
+
+      youMarker = L.marker(e.latlng, { icon: blueIcon })
+        .addTo(map)
+        .bindPopup("Dein Standort")
+        .openPopup();
+
+      youCircle = L.circle(e.latlng, { radius: e.accuracy }).addTo(map);
+    });
+
+    map.on("locationerror", () => {
+      alert("Standort konnte nicht ermittelt werden.");
+    });
+
+    // -----------------------------
+    // Filter-Control
+    // -----------------------------
+    let filterRoot = null;
+
+    function buildFilterControl() {
+      const ctrl = L.control({ position: "topright" });
+
+      ctrl.onAdd = function() {
+        const wrap = L.DomUtil.create("div", "gb-filter");
+
+        wrap.innerHTML = `
+          <div class="gb-filter-header">
+            <strong style="flex:1">Anzahl an Punkten <span class="gb-count" style="font-weight:400">0</span></strong>
+            <span class="gb-toggle">▾</span>
+          </div>
+          <div class="gb-filter-body">
+            <div style="margin-bottom:8px">
+              <div class="gb-mini-title">Frucht</div>
+              <div class="gb-fruits gb-inline-checks"></div>
+            </div>
+            <div style="margin-bottom:8px">
+              <div class="gb-mini-title">Erntezeit</div>
+              <div class="gb-seasons gb-inline-checks"></div>
+            </div>
+            <div class="gb-filter-actions">
+              <button type="button" class="gb-reset">Zurücksetzen</button>
+              <button type="button" class="gb-apply">Anwenden</button>
+            </div>
+          </div>
+        `;
+
+        L.DomEvent.disableClickPropagation(wrap);
+        L.DomEvent.disableScrollPropagation(wrap);
+
+        const header = wrap.querySelector(".gb-filter-header");
+        const body = wrap.querySelector(".gb-filter-body");
+        const toggle = wrap.querySelector(".gb-toggle");
+
+        function setCollapsed(collapsed) {
+          body.style.display = collapsed ? "none" : "block";
+          toggle.textContent = collapsed ? "▸" : "▾";
+          localStorage.setItem(FILTER_COLLAPSE_KEY, collapsed ? "1" : "0");
+        }
+
+        header.onclick = () => {
+          setCollapsed(body.style.display !== "none");
+        };
+
+        setCollapsed(localStorage.getItem(FILTER_COLLAPSE_KEY) === "1");
+
+        wrap.querySelector(".gb-reset").onclick = () => {
+          wrap.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+          applyFilters();
+        };
+
+        wrap.querySelector(".gb-apply").onclick = () => applyFilters();
+
+        filterRoot = wrap;
+        return wrap;
+      };
+
+      ctrl.addTo(map);
+    }
+
+    function populateFilterOptions() {
+      if (!filterRoot) return;
+
+      const fruitSet = new Set(FRUIT_DEFAULTS);
+      const seasonSet = new Set(SEASON_DEFAULTS);
+
+      allMarkers.forEach(m => {
+        toArray(m.fruit).forEach(v => fruitSet.add(v));
+        toArray(m.season).forEach(v => seasonSet.add(v));
+      });
+
+      const fruitHtml = Array.from(fruitSet)
+        .sort((a, b) => a.localeCompare(b, "de"))
+        .map(v => `
+          <label>
+            <input type="checkbox" name="f" value="${esc(v)}"> ${esc(v)}
+          </label>
+        `)
+        .join("");
+
+      const seasonHtml = Array.from(seasonSet)
+        .sort((a, b) => a.localeCompare(b, "de"))
+        .map(v => `
+          <label>
+            <input type="checkbox" name="s" value="${esc(v)}"> ${esc(v)}
+          </label>
+        `)
+        .join("");
+
+      filterRoot.querySelector(".gb-fruits").innerHTML = fruitHtml;
+      filterRoot.querySelector(".gb-seasons").innerHTML = seasonHtml;
+    }
+
+    function applyFilters() {
+      if (!filterRoot) return;
+
+      const fruitsSel = Array.from(filterRoot.querySelectorAll('input[name="f"]:checked')).map(i => i.value);
+      const seasonsSel = Array.from(filterRoot.querySelectorAll('input[name="s"]:checked')).map(i => i.value);
+
+      function matches(m) {
+        const mf = toArray(m.fruit);
+        const ms = toArray(m.season);
+
+        if (fruitsSel.length && !mf.some(x => fruitsSel.includes(x))) return false;
+        if (seasonsSel.length && !ms.some(x => seasonsSel.includes(x))) return false;
+        return true;
+      }
+
+      let count = 0;
+
+      allMarkers.forEach(m => {
+        const mk = leafletMarkers.get(m.id);
+        if (!mk) return;
+
+        const ok = matches(m);
+        mk.setOpacity(ok ? 1 : 0.35);
+        if (ok) count++;
+      });
+
+      filterRoot.querySelector(".gb-count").textContent = String(count);
+    }
+
+    // -----------------------------
+    // Marker Rendering
+    // -----------------------------
+    function renderPopupSummary(m) {
+      const fruitText = toArray(m.fruit).join(", ");
+      const seasonText = toArray(m.season).join(", ");
+
+      return `
+        <div class="gb-summary">
+          <div><strong>Frucht:</strong> ${esc(fruitText || "-")}</div>
+          ${m.address ? `<div><strong>Adresse:</strong> ${esc(m.address)}</div>` : ""}
+          ${seasonText ? `<div><strong>Erntezeit:</strong> ${esc(seasonText)}</div>` : ""}
+          ${m.created_at ? `<div><strong>Eingetragen:</strong> ${esc(formatCreatedAt(m.created_at))}</div>` : ""}
+          ${m.fruit_info ? `<div style="margin-top:6px"><strong>Frucht-Info:</strong> ${esc(m.fruit_info)}</div>` : ""}
+          ${m.note ? `<div style="margin-top:6px"><strong>Hinweis:</strong> ${esc(m.note)}</div>` : ""}
+        </div>
+      `;
+    }
+
+    function makeLeafletMarker(m) {
+      return L.marker([m.lat, m.lng], {
+        icon: yellowIcon,
+        opacity: 1
+      });
+    }
+
+    function rebuildMarkers() {
+      markerLayer.clearLayers();
+      leafletMarkers.clear();
+
+      allMarkers.forEach(m => {
+        const mk = makeLeafletMarker(m).addTo(markerLayer);
+        mk.bindPopup(renderPopupSummary(m), { maxWidth: 340 });
+        leafletMarkers.set(m.id, mk);
+      });
+
+      applyFilters();
+    }
+
+    map.on("popupopen", (e) => {
+      createPaused = true;
+
+      const root = e.popup.getElement();
+      if (root) {
+        L.DomEvent.disableClickPropagation(root);
+        L.DomEvent.disableScrollPropagation(root);
+      }
+    });
+
+    map.on("popupclose", () => {
+      createPaused = false;
+      if (tempCreateMarker) {
+        map.removeLayer(tempCreateMarker);
+        tempCreateMarker = null;
+      }
+    });
+
+    // -----------------------------
+    // Formular zum Anlegen
+    // -----------------------------
+    function getCreateFormHtml(id, data) {
+      return `
+        <form class="gb-form" data-form-id="${id}">
+          <label for="address_${id}">Adresse</label>
+          <input
+            type="text"
+            id="address_${id}"
+            value="${esc(data.address || "")}"
+            placeholder="Adresse wird geladen..."
+          />
+          <div class="gb-loading">
+            ${data.addressLoading ? "Adresse wird automatisch ermittelt ..." : ""}
+          </div>
+
+          <fieldset>
+            <legend>Frucht-Art (mehrfach möglich)</legend>
+            <div class="gb-checks">
+              ${FRUIT_DEFAULTS.map(v => `
+                <label>
+                  <input type="checkbox" name="fruit" value="${esc(v)}"> ${esc(v)}
+                </label>
+              `).join("")}
+            </div>
+          </fieldset>
+
+          <input
+            type="text"
+            id="fruit_other_${id}"
+            placeholder="andere (Komma getrennt)"
+          />
+
+          <textarea
+            id="fruit_info_${id}"
+            placeholder='Frucht-Info, z. B. „eignet sich gut für Saft“'
+          ></textarea>
+
+          <fieldset>
+            <legend>Erntezeit (mehrfach möglich)</legend>
+            <div class="gb-checks">
+              ${SEASON_DEFAULTS.map(v => `
+                <label>
+                  <input type="checkbox" name="season" value="${esc(v)}"> ${esc(v)}
+                </label>
+              `).join("")}
+            </div>
+          </fieldset>
+
+          <label for="note_${id}">Hinweis (optional)</label>
+          <textarea
+            id="note_${id}"
+            placeholder="z.B. frei zugänglich"
+          ></textarea>
+
+          <button type="submit" class="gb-btn">Speichern</button>
+        </form>
+      `;
+    }
+
+    async function openCreateForm(latlng) {
+      const formId = "new_" + Date.now();
+
+      if (tempCreateMarker) {
+        map.removeLayer(tempCreateMarker);
+        tempCreateMarker = null;
+      }
+
+      tempCreateMarker = L.marker(latlng, { icon: yellowIcon }).addTo(map);
+
+      const state = {
+        address: "",
+        addressLoading: true
+      };
+
+      tempCreateMarker.bindPopup(getCreateFormHtml(formId, state), {
+        maxWidth: 340,
+        closeOnClick: false
+      }).openPopup();
+
+      try {
+        const geo = await reverseGeocode(latlng.lat, latlng.lng);
+        state.address = formatAddressFromNominatim(geo);
+      } catch (e) {
+        state.address = "";
+      } finally {
+        state.addressLoading = false;
+        if (tempCreateMarker && tempCreateMarker.isPopupOpen()) {
+          tempCreateMarker.setPopupContent(getCreateFormHtml(formId, state));
+          attachCreateFormHandler(formId, latlng);
+        }
+      }
+
+      attachCreateFormHandler(formId, latlng);
+    }
+
+    function attachCreateFormHandler(formId, latlng) {
+      setTimeout(() => {
+        const form = document.querySelector(`.gb-form[data-form-id="${formId}"]`);
+        if (!form || form.dataset.bound === "1") return;
+
+        form.dataset.bound = "1";
+        L.DomEvent.disableClickPropagation(form);
+        L.DomEvent.disableScrollPropagation(form);
+
+        form.addEventListener("submit", async (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+
+          const submitBtn = form.querySelector('button[type="submit"]');
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = "Speichert ...";
+          }
+
+          const fruitChecked = Array.from(form.querySelectorAll('input[name="fruit"]:checked'))
+            .map(i => i.value.trim())
+            .filter(Boolean);
+
+          const fruitOther = (document.getElementById(`fruit_other_${formId}`)?.value || "")
+            .split(",")
+            .map(s => s.trim())
+            .filter(Boolean);
+
+          const season = Array.from(form.querySelectorAll('input[name="season"]:checked'))
+            .map(i => i.value.trim())
+            .filter(Boolean);
+
+          const payload = {
+            lat: latlng.lat,
+            lng: latlng.lng,
+            address: (document.getElementById(`address_${formId}`)?.value || "").trim() || null,
+            fruit: [...new Set([...fruitChecked, ...fruitOther])],
+            season: season,
+            note: (document.getElementById(`note_${formId}`)?.value || "").trim() || null,
+            fruit_info: (document.getElementById(`fruit_info_${formId}`)?.value || "").trim() || null
+          };
+
+          try {
+            const created = await insertMarkerToSupabase(payload);
+            allMarkers.unshift(created);
+            rebuildMarkers();
+            populateFilterOptions();
+            applyFilters();
+
+            map.closePopup();
+
+            const mk = leafletMarkers.get(created.id);
+            if (mk) mk.openPopup();
+
+            showStatus("Punkt gespeichert.");
+          } catch (error) {
+            console.error("Supabase Insert Fehler:", error);
+            alert("Speichern fehlgeschlagen: " + (error.message || JSON.stringify(error)));
+            showStatus("Speichern fehlgeschlagen.", true);
+
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = "Speichern";
+            }
+            }
+        });
+      }, 0);
+    }
+
+    map.on("click", (e) => {
+      if (createPaused) return;
+      openCreateForm(e.latlng);
+    });
+
+    // -----------------------------
+    // Initialisierung
+    // -----------------------------
+    async function init() {
+      buildFilterControl();
+      allMarkers = await loadMarkersFromSupabase();
+      populateFilterOptions();
+      rebuildMarkers();
+      applyFilters();
+
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 400);
+    }
+
+    init();
+
+    window.addEventListener("resize", () => {
+      map.invalidateSize();
+    });
+  </script>
+</body>
+</html>
